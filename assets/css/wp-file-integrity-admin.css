@@ -1,0 +1,112 @@
+/**
+ * Admin CSS for WP File Integrity Checker
+ */
+
+/* Card styling */
+.wp-file-integrity-checker .card {
+    max-width: 100%;
+    margin-top: 1.5em;
+    padding: 0.7em 2em 1.5em;
+    min-width: 255px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* File list styling */
+.wp-file-integrity-file-list {
+    margin: 1em 0;
+    padding: 0 0 0 1.5em;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #e5e5e5;
+    background: #f8f8f8;
+    padding: 10px 15px;
+}
+
+.wp-file-integrity-file-list li {
+    margin-bottom: 5px;
+    padding: 3px 0;
+    word-break: break-all;
+}
+
+/* Specific file list colors */
+.wp-file-integrity-file-list.modified-files li {
+    color: #d63638;
+}
+
+.wp-file-integrity-file-list.missing-files li {
+    color: #8a6d3b;
+}
+
+.wp-file-integrity-file-list.unknown-files li {
+    color: #2271b1;
+}
+
+.wp-file-integrity-file-list.suspicious-files li {
+    color: #b32d2e;
+    font-weight: bold;
+}
+
+.wp-file-integrity-file-list.verified-files li {
+    color: #00a32a;
+}
+
+.wp-file-integrity-file-list.modified-files-wporg li {
+    color: #d63638;
+}
+
+.wp-file-integrity-file-list.not-in-wporg-files li {
+    color: #826eb4;
+}
+
+/* Filter styling */
+.wp-file-integrity-filter {
+    margin: 1em 0;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+}
+
+.wp-file-integrity-filter input {
+    margin-left: 10px;
+}
+
+/* Result counts */
+h3 .count {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: #666;
+}
+
+/* View original links */
+.wp-file-integrity-file-list li a {
+    margin-left: 10px;
+    text-decoration: none;
+    color: #2271b1;
+    font-size: 0.9em;
+}
+
+.wp-file-integrity-file-list li a:hover {
+    text-decoration: underline;
+}
+
+/* Scan progress */
+.wp-file-integrity-progress {
+    padding: 10px;
+    background: #f0f6fc;
+    border-left: 4px solid #72aee6;
+    margin: 1em 0;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+    .wp-file-integrity-file-list {
+        max-height: 300px;
+    }
+    
+    .wp-file-integrity-filter input {
+        display: block;
+        margin: 10px 0 0;
+        width: 100%;
+    }
+}
