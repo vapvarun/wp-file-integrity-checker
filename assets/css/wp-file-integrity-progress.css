@@ -1,0 +1,94 @@
+/* Progress bar container */
+.wp-file-integrity-progress {
+    padding: 15px;
+    background: #f0f6fc;
+    border-left: 4px solid #72aee6;
+    margin: 1.5em 0;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Progress bar track */
+.progress-bar-container {
+    height: 20px;
+    background-color: #f0f0f1;
+    border-radius: 10px;
+    margin: 10px 0;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Actual progress bar */
+.progress-bar {
+    height: 100%;
+    background-color: #2271b1;
+    border-radius: 10px;
+    transition: width 0.5s ease-in-out;
+    width: 0%;
+    background-image: linear-gradient(45deg, 
+        rgba(255, 255, 255, 0.15) 25%, 
+        transparent 25%, 
+        transparent 50%, 
+        rgba(255, 255, 255, 0.15) 50%, 
+        rgba(255, 255, 255, 0.15) 75%, 
+        transparent 75%, 
+        transparent);
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* Animation for the striped effect */
+@keyframes progress-bar-stripes {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
+}
+
+/* Progress information display */
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    color: #50575e;
+}
+
+.progress-percentage {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #2271b1;
+}
+
+.progress-details {
+    flex-grow: 1;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.progress-step {
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+/* Complete status */
+.wp-file-integrity-progress.complete .progress-bar {
+    background-color: #00a32a;
+    animation: none;
+}
+
+/* Spinner for initial loading */
+.scan-spinner {
+    float: none;
+    vertical-align: middle;
+    margin-left: 10px;
+}
+
+/* File counter styles */
+.file-counter {
+    background: #f0f6fc;
+    padding: 5px 10px;
+    border-radius: 3px;
+    margin-left: 5px;
+    font-weight: 600;
+}

@@ -25,6 +25,12 @@ if (!class_exists('WP_File_Integrity_Admin_Progress')) {
             // Register AJAX handlers for progress updates
             add_action('wp_ajax_wp_file_integrity_update_progress', array($this, 'handle_progress_update'));
             add_action('wp_ajax_wp_file_integrity_get_progress', array($this, 'handle_get_progress'));
+            
+            // Enqueue progress tracking scripts
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_progress_assets'));
+            
+            // Add script to footer
+            add_action('admin_footer', array($this, 'add_progress_scripts'));
         }
         
         /**
@@ -112,26 +118,39 @@ if (!class_exists('WP_File_Integrity_Admin_Progress')) {
         }
         
         /**
-         * Generate HTML for progress bar
+         * Enqueue CSS and JS for progress tracking
          * 
-         * @return string HTML for progress bar
+         * @param string $hook Current admin page
          */
-        public function get_progress_bar_html() {
-            $progress_data = $this->get_progress_data();
-            $percentage = $progress_data['percentage'];
+        public function enqueue_progress_assets($hook) {
+            // Only load on our plugin pages
+            if (strpos($hook, 'wp-file-integrity-checker') === false && 
+                strpos($hook, 'tools_page_wp-file-integrity-checker') === false) {
+                return;
+            }
             
-            $html = '<div class="wp-file-integrity-progress" data-progress-id="' . esc_attr($this->progress_id) . '">';
-            $html .= '<div class="progress-bar-container">';
-            $html .= '<div class="progress-bar" style="width: ' . esc_attr($percentage) . '%"></div>';
-            $html .= '</div>';
-            $html .= '<div class="progress-info">';
-            $html .= '<span class="progress-percentage">' . esc_html($percentage) . '%</span>';
-            $html .= '<span class="progress-details">' . esc_html($progress_data['processed_files']) . ' / ' . esc_html($progress_data['total_files']) . ' files</span>';
-            $html .= '<span class="progress-step">' . esc_html($progress_data['current_step']) . '</span>';
-            $html .= '</div>';
-            $html .= '</div>';
+            // Enqueue progress bar CSS
+            wp_enqueue_style(
+                'wp-file-integrity-progress-css',
+                plugin_dir_url(WP_FILE_INTEGRITY_FILE) . 'assets/css/wp-file-integrity-progress.css',
+                array(),
+                WP_FILE_INTEGRITY_VERSION
+            );
             
-            return $html;
+            // Enqueue progress bar JS
+            wp_enqueue_script(
+                'wp-file-integrity-progress-js',
+                plugin_dir_url(WP_FILE_INTEGRITY_FILE) . 'assets/js/wp-file-integrity-progress.js',
+                array('jquery'),
+                WP_FILE_INTEGRITY_VERSION,
+                true
+            );
+            
+            // Add nonce and other data
+            wp_localize_script('wp-file-integrity-progress-js', 'wpFileIntegrityData', array(
+                'progressNonce' => wp_create_nonce('wp_file_integrity_progress_nonce'),
+                'ajaxUrl' => admin_url('admin-ajax.php')
+            ));
         }
         
         /**
@@ -193,39 +212,8 @@ if (!class_exists('WP_File_Integrity_Admin_Progress')) {
             ?>
             <script type="text/javascript">
             jQuery(document).ready(function($) {
-                var progressId = $('.wp-file-integrity-progress').data('progress-id');
-                if (!progressId) return;
-                
-                var progressUpdateInterval;
-                
-                function updateProgressBar() {
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'GET',
-                        data: {
-                            action: 'wp_file_integrity_get_progress',
-                            progress_id: progressId,
-                            nonce: '<?php echo wp_create_nonce('wp_file_integrity_progress_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                var data = response.data;
-                                $('.wp-file-integrity-progress .progress-bar').css('width', data.percentage + '%');
-                                $('.wp-file-integrity-progress .progress-percentage').text(data.percentage + '%');
-                                $('.wp-file-integrity-progress .progress-details').text(data.processed_files + ' / ' + data.total_files + ' files');
-                                $('.wp-file-integrity-progress .progress-step').text(data.current_step);
-                                
-                                // Stop updating if scan is complete
-                                if (data.percentage >= 100) {
-                                    clearInterval(progressUpdateInterval);
-                                }
-                            }
-                        }
-                    });
-                }
-                
-                // Update progress every 2 seconds
-                progressUpdateInterval = setInterval(updateProgressBar, 2000);
+                // Progress tracking is now handled by the separate JS file
+                // This is kept for backward compatibility
             });
             </script>
             <?php

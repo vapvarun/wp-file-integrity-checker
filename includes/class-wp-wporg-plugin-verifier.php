@@ -4,6 +4,7 @@
  * 
  * This component checks suspicious plugin files against the WordPress.org SVN repository.
  * It verifies if plugin files match their original versions from WordPress.org.
+ * Now with integrated progress tracking.
  */
 
 if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
@@ -14,6 +15,24 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
         private $verification_results = array();
         private $plugins_cache = array();
         private $processed_plugins = array();
+        
+        // Progress tracker
+        private $progress_tracker = null;
+        private $processed_files = 0;
+        private $total_files = 0;
+        
+        /**
+         * Constructor 
+         */
+        public function __construct() {
+            // Try to get progress tracker instance from core
+            global $wp_file_integrity_core;
+            if (isset($wp_file_integrity_core) && 
+                property_exists($wp_file_integrity_core, 'progress_tracker') &&
+                $wp_file_integrity_core->progress_tracker) {
+                $this->progress_tracker = $wp_file_integrity_core->progress_tracker;
+            }
+        }
         
         /**
          * Verify a list of suspicious files against WordPress.org
@@ -32,13 +51,26 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
             
             $this->processed_plugins = array();
             
+            // Setup progress tracking
+            $this->total_files = count($suspicious_files);
+            $this->processed_files = 0;
+            
             foreach ($suspicious_files as $file_path) {
                 // Extract clean path (remove any annotations)
                 $clean_path = preg_replace('/ \(.*\)$/', '', $file_path);
                 
                 // Skip non-plugin files
                 if (strpos($clean_path, 'wp-content/plugins/') !== 0) {
+                    $this->processed_files++;
                     continue;
+                }
+                
+                // Update progress if tracker is available
+                if ($this->progress_tracker && $this->processed_files % 5 === 0) {
+                    $this->progress_tracker->update_progress(
+                        $this->processed_files,
+                        sprintf(__('Verifying plugin file: %s', 'wp-file-integrity-checker'), basename($clean_path))
+                    );
                 }
                 
                 // Extract plugin slug from path
@@ -47,6 +79,7 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
                     
                     // Skip if we've already processed this plugin
                     if (in_array($plugin_slug, $this->processed_plugins)) {
+                        $this->processed_files++;
                         continue;
                     }
                     
@@ -69,6 +102,16 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
                         }
                     }
                 }
+                
+                $this->processed_files++;
+            }
+            
+            // Update progress to complete if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->total_files,
+                    __('Verification complete', 'wp-file-integrity-checker')
+                );
             }
             
             return $this->verification_results;
@@ -137,6 +180,14 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
                 return $this->plugins_cache[$plugin_slug];
             }
             
+            // Update progress if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->processed_files,
+                    sprintf(__('Checking if %s exists on WordPress.org...', 'wp-file-integrity-checker'), $plugin_slug)
+                );
+            }
+            
             // Use WordPress.org API to check if plugin exists
             $response = wp_remote_head("https://plugins.svn.wordpress.org/$plugin_slug/trunk/");
             
@@ -163,6 +214,15 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
         private function verify_file_against_svn($plugin_slug, $file_path) {
             // Get relative path within the plugin
             $relative_path = str_replace("wp-content/plugins/$plugin_slug/", '', $file_path);
+            
+            // Update progress if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->processed_files,
+                    sprintf(__('Verifying %s/%s against WordPress.org...', 'wp-file-integrity-checker'), 
+                            $plugin_slug, $relative_path)
+                );
+            }
             
             // Get local file hash
             if (!file_exists(ABSPATH . $file_path)) {
@@ -242,6 +302,14 @@ if (!class_exists('WP_WPOrg_Plugin_Verifier')) {
          * @return string|false Stable tag or false if not found
          */
         private function get_plugin_stable_tag($plugin_slug) {
+            // Update progress if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->processed_files,
+                    sprintf(__('Getting stable version of %s...', 'wp-file-integrity-checker'), $plugin_slug)
+                );
+            }
+            
             // Try to get plugin info from WordPress.org API
             $response = wp_remote_get("https://api.wordpress.org/plugins/info/1.0/$plugin_slug.json");
             

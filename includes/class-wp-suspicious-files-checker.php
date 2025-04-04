@@ -4,6 +4,7 @@
  * 
  * This file contains the functionality to check for suspicious files in WordPress plugins directory.
  * This is separate from the unknown files checker to avoid flagging legitimate plugins as unknown.
+ * Now with integrated progress tracking.
  */
 
 if (!class_exists('WP_Suspicious_Files_Checker')) {
@@ -13,6 +14,23 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
         // Store suspicious files
         private $suspicious_files = array();
         
+        // Progress tracking
+        private $progress_tracker = null;
+        private $files_scanned = 0;
+        
+        /**
+         * Constructor
+         */
+        public function __construct() {
+            // Try to get progress tracker instance from core
+            global $wp_file_integrity_core;
+            if (isset($wp_file_integrity_core) && 
+                property_exists($wp_file_integrity_core, 'progress_tracker') &&
+                $wp_file_integrity_core->progress_tracker) {
+                $this->progress_tracker = $wp_file_integrity_core->progress_tracker;
+            }
+        }
+        
         /**
          * Check for suspicious files in plugins directory and other sensitive locations
          * 
@@ -21,6 +39,7 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
         public function check_for_suspicious_files() {
             // Clear previous results
             $this->suspicious_files = array();
+            $this->files_scanned = 0;
             
             // Get paths
             $abspath = untrailingslashit(ABSPATH);
@@ -28,9 +47,25 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
             $mu_plugins_dir = $abspath . '/wp-content/mu-plugins';
             $wp_content_dir = $abspath . '/wp-content';
             
+            // Update progress if available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->files_scanned,
+                    __('Starting suspicious files scan...', 'wp-file-integrity-checker')
+                );
+            }
+            
             // Scan plugins directory
             if (is_dir($plugins_dir)) {
                 $this->scan_directory_for_suspicious_files($plugins_dir, 'wp-content/plugins');
+            }
+            
+            // Update progress if available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->files_scanned,
+                    __('Scanning must-use plugins...', 'wp-file-integrity-checker')
+                );
             }
             
             // Scan mu-plugins directory more aggressively
@@ -38,8 +73,24 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
                 $this->scan_directory_for_suspicious_mu_plugins($mu_plugins_dir, 'wp-content/mu-plugins');
             }
             
+            // Update progress if available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->files_scanned,
+                    __('Checking wp-content drop-ins...', 'wp-file-integrity-checker')
+                );
+            }
+            
             // Check direct wp-content PHP files (drop-ins) more aggressively
             $this->scan_wp_content_for_suspicious_files($wp_content_dir);
+            
+            // Final progress update
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $this->files_scanned,
+                    __('Suspicious files scan complete', 'wp-file-integrity-checker')
+                );
+            }
             
             return $this->suspicious_files;
         }
@@ -65,6 +116,17 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
                 
                 $file_path = $dir_path . '/' . $file;
                 $relative_file_path = $relative_path . '/' . $file;
+                
+                // Update progress counter
+                $this->files_scanned++;
+                
+                // Update progress every 10 files if progress tracker is available
+                if ($this->progress_tracker && $this->files_scanned % 10 === 0) {
+                    $this->progress_tracker->update_progress(
+                        $this->files_scanned,
+                        sprintf(__('Checking MU plugin: %s', 'wp-file-integrity-checker'), $relative_file_path)
+                    );
+                }
                 
                 if (is_dir($file_path)) {
                     // Recursively scan subdirectories
@@ -117,6 +179,17 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
                 $file_path = $wp_content_dir . '/' . $file;
                 $relative_file_path = 'wp-content/' . $file;
                 
+                // Update progress counter
+                $this->files_scanned++;
+                
+                // Update progress if progress tracker is available
+                if ($this->progress_tracker) {
+                    $this->progress_tracker->update_progress(
+                        $this->files_scanned,
+                        sprintf(__('Checking wp-content file: %s', 'wp-file-integrity-checker'), $file)
+                    );
+                }
+                
                 // If file is not in allowed drop-ins list, check it thoroughly
                 if (!in_array($file, $allowed_dropins)) {
                     $this->suspicious_files[] = $relative_file_path . ' (UNEXPECTED DROP-IN - HIGH RISK)';
@@ -165,6 +238,22 @@ if (!class_exists('WP_Suspicious_Files_Checker')) {
                 // Skip vendor directories as they contain third-party code
                 if (strpos($relative_file_path, '/vendor/') !== false) {
                     continue;
+                }
+                
+                // Update progress counter
+                $this->files_scanned++;
+                
+                // Update progress every 50 files if progress tracker is available
+                if ($this->progress_tracker && $this->files_scanned % 50 === 0) {
+                    $plugin_name = '';
+                    if (preg_match('#wp-content/plugins/([^/]+)/#', $relative_file_path, $matches)) {
+                        $plugin_name = $matches[1];
+                    }
+                    
+                    $this->progress_tracker->update_progress(
+                        $this->files_scanned,
+                        sprintf(__('Scanning plugin: %s', 'wp-file-integrity-checker'), $plugin_name ? $plugin_name : basename($relative_path))
+                    );
                 }
                 
                 // Skip common legitimate file types

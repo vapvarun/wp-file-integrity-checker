@@ -3,6 +3,7 @@
  * Core functionality for WP File Integrity Checker
  * 
  * Handles file scanning, verification, and notifications
+ * with integrated progress tracking
  */
 
 if (!class_exists('WP_File_Integrity_Core')) {
@@ -20,12 +21,21 @@ if (!class_exists('WP_File_Integrity_Core')) {
         public $not_in_wporg_files = array();
         public $verification_errors = array();
         
+        // Progress tracker
+        private $progress_tracker = null;
+        
         /**
          * Constructor
          */
         public function __construct() {
             // Add scheduled check action
             add_action('wp_file_integrity_check', array($this, 'perform_scheduled_check'));
+            
+            // Initialize progress tracker
+            if (is_admin()) {
+                require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-file-integrity-admin-progress.php';
+                $this->progress_tracker = new WP_File_Integrity_Admin_Progress();
+            }
         }
         
         /**
@@ -50,21 +60,41 @@ if (!class_exists('WP_File_Integrity_Core')) {
                 return false;
             }
             
+            // Initialize progress tracker with total files count if available
+            if ($this->progress_tracker) {
+                $total_files = count($checksums) + 300; // Add extra for unknown/suspicious files checks
+                $this->progress_tracker->init_progress($total_files);
+            }
+            
             // Get ABSPATH without trailing slash
             $abspath = untrailingslashit(ABSPATH);
+            
+            // Counter for processed files
+            $processed_files = 0;
             
             // Check core files against checksums
             foreach ($checksums as $file => $checksum) {
                 // Skip Akismet and Hello Dolly files
                 if ($this->should_skip_file($file)) {
+                    $processed_files++;
                     continue;
                 }
                 
                 $file_path = $abspath . '/' . $file;
                 
+                // Update progress every 50 files if progress tracker is available
+                if ($this->progress_tracker && $processed_files % 50 === 0) {
+                    $current_directory = dirname($file);
+                    $this->progress_tracker->update_progress(
+                        $processed_files,
+                        sprintf(__('Scanning core files in %s...', 'wp-file-integrity-checker'), $current_directory)
+                    );
+                }
+                
                 // Check if file exists
                 if (!file_exists($file_path)) {
                     $this->missing_files[] = $file;
+                    $processed_files++;
                     continue;
                 }
                 
@@ -75,19 +105,62 @@ if (!class_exists('WP_File_Integrity_Core')) {
                 if ($file_hash !== $checksum) {
                     $this->modified_files[] = $file;
                 }
+                
+                $processed_files++;
+            }
+            
+            // Update progress for unknown files phase
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $processed_files,
+                    __('Checking for unknown files in WordPress core...', 'wp-file-integrity-checker')
+                );
             }
             
             // Check for unknown files
             $unknown_files_checker = new WP_Unknown_Files_Checker();
             $this->unknown_files = $unknown_files_checker->check_for_unknown_files($checksums);
             
+            // Update counter
+            $processed_files += 100; // Estimate for unknown files check
+            
+            // Update progress for suspicious files phase
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $processed_files,
+                    __('Checking for suspicious files in plugins...', 'wp-file-integrity-checker')
+                );
+            }
+            
             // Check for suspicious files in plugins directory
             $suspicious_files_checker = new WP_Suspicious_Files_Checker();
             $this->suspicious_files = $suspicious_files_checker->check_for_suspicious_files();
             
+            // Update counter
+            $processed_files += 100; // Estimate for suspicious files check
+            
+            // Update progress for theme files phase
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $processed_files,
+                    __('Processing theme files...', 'wp-file-integrity-checker')
+                );
+            }
+            
             // Filter theme files that are commonly modified
             $theme_file_handler = new WP_Theme_File_Handler();
             $this->modified_files = $theme_file_handler->filter_modified_files($this->modified_files);
+            
+            // Update counter
+            $processed_files += 50; // Estimate for theme file processing
+            
+            // Update progress for completing phase
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    $processed_files,
+                    __('Finalizing scan results...', 'wp-file-integrity-checker')
+                );
+            }
             
             // Send notification if configured
             $options = get_option('wp_file_integrity_checker_options', array());
@@ -103,7 +176,35 @@ if (!class_exists('WP_File_Integrity_Core')) {
             // Set scan results flag
             $this->scan_results = true;
             
+            // Mark progress as complete if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->complete_progress();
+            }
+            
             return true;
+        }
+        
+        /**
+         * Check WordPress core file integrity with WordPress.org verification
+         */
+        public function check_file_integrity_with_wporg_verification() {
+            // First run the normal integrity check
+            $result = $this->check_file_integrity();
+            
+            // Then verify suspicious files against WordPress.org
+            if ($result && !empty($this->suspicious_files)) {
+                // Update progress if progress tracker is available
+                if ($this->progress_tracker) {
+                    $this->progress_tracker->update_progress(
+                        0, // Reset counter for new phase
+                        __('Verifying suspicious files against WordPress.org...', 'wp-file-integrity-checker')
+                    );
+                }
+                
+                $this->verify_suspicious_files_against_wporg();
+            }
+            
+            return $result;
         }
         
         /**
@@ -191,6 +292,15 @@ if (!class_exists('WP_File_Integrity_Core')) {
             // Initialize the verifier
             $wporg_verifier = new WP_WPOrg_Plugin_Verifier();
             
+            // Get count of files to verify
+            $files_count = count($this->suspicious_files);
+            $processed_count = 0;
+            
+            // Initialize progress with count if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->init_progress($files_count);
+            }
+            
             // Run verification
             $results = $wporg_verifier->verify_plugin_files($this->suspicious_files);
             
@@ -200,27 +310,17 @@ if (!class_exists('WP_File_Integrity_Core')) {
             $this->not_in_wporg_files = $results['not_in_wporg'];
             $this->verification_errors = $results['errors'];
             
+            // Update progress as complete if progress tracker is available
+            if ($this->progress_tracker) {
+                $this->progress_tracker->complete_progress();
+            }
+            
             // Update stored results
             $this->store_scan_results();
             
             return true;
         }
-
-        /**
-         * Check WordPress core file integrity with WordPress.org verification
-         */
-        public function check_file_integrity_with_wporg_verification() {
-            // First run the normal integrity check
-            $result = $this->check_file_integrity();
-            
-            // Then verify suspicious files against WordPress.org
-            if ($result && !empty($this->suspicious_files)) {
-                $this->verify_suspicious_files_against_wporg();
-            }
-            
-            return $result;
-        }
-
+        
         /**
          * Check if a file should be skipped during integrity checking
          *
@@ -240,7 +340,7 @@ if (!class_exists('WP_File_Integrity_Core')) {
             
             return false;
         }
-
+        
         /**
          * Get the WordPress core checksums from the API
          */
@@ -248,6 +348,13 @@ if (!class_exists('WP_File_Integrity_Core')) {
             $locale = get_locale();
             $url = 'https://api.wordpress.org/core/checksums/1.0/?' . 
                 http_build_query(array('version' => $version, 'locale' => $locale));
+            
+            if ($this->progress_tracker) {
+                $this->progress_tracker->update_progress(
+                    0,
+                    __('Fetching WordPress core file checksums...', 'wp-file-integrity-checker')
+                );
+            }
             
             $response = wp_remote_get($url);
             
@@ -264,7 +371,7 @@ if (!class_exists('WP_File_Integrity_Core')) {
             
             return $data['checksums'];
         }
-
+        
         /**
          * Perform scheduled check
          */
@@ -278,7 +385,7 @@ if (!class_exists('WP_File_Integrity_Core')) {
                 $this->check_file_integrity();
             }
         }
-
+        
         /**
          * Send notification email
          */
