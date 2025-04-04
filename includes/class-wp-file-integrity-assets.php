@@ -36,6 +36,14 @@ if (!class_exists('WP_File_Integrity_Assets')) {
                 WP_FILE_INTEGRITY_VERSION
             );
             
+            // Enqueue progress bar CSS
+            wp_enqueue_style(
+                'wp-file-integrity-progress-css',
+                plugin_dir_url(WP_FILE_INTEGRITY_FILE) . 'assets/css/wp-file-integrity-progress.css',
+                array(),
+                WP_FILE_INTEGRITY_VERSION
+            );
+            
             // Enqueue JS
             wp_enqueue_script(
                 'wp-file-integrity-admin-js',
@@ -44,6 +52,21 @@ if (!class_exists('WP_File_Integrity_Assets')) {
                 WP_FILE_INTEGRITY_VERSION,
                 true
             );
+            
+            // Enqueue progress bar JS
+            wp_enqueue_script(
+                'wp-file-integrity-progress-js',
+                plugin_dir_url(WP_FILE_INTEGRITY_FILE) . 'assets/js/wp-file-integrity-progress.js',
+                array('jquery'),
+                WP_FILE_INTEGRITY_VERSION,
+                true
+            );
+            
+            // Add nonce and other data
+            wp_localize_script('wp-file-integrity-progress-js', 'wpFileIntegrityData', array(
+                'progressNonce' => wp_create_nonce('wp_file_integrity_progress_nonce'),
+                'ajaxUrl' => admin_url('admin-ajax.php')
+            ));
         }
     }
 }

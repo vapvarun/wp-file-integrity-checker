@@ -90,7 +90,7 @@
             var self = this;
             
             $.ajax({
-                url: ajaxurl,
+                url: wpFileIntegrityData.ajaxUrl,  // FIXED: Use localized AJAX URL
                 type: 'GET',
                 data: {
                     action: 'wp_file_integrity_get_progress',

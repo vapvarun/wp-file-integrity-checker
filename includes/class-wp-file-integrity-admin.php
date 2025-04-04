@@ -202,6 +202,219 @@ if (!class_exists('WP_File_Integrity_Admin')) {
                     $this->render_check_tab();
                 }
                 ?>
+                
+                <script type="text/javascript">
+                jQuery(document).ready(function($) {
+                    $('form[name="wp_file_integrity_run_check"]').on('submit', function() {
+                        console.log('Form submitted');
+                        
+                        // Define scan steps
+                        var scanSteps = [
+                            'Fetching WordPress core file checksums',
+                            'Scanning core files',
+                            'Checking for unknown files in WordPress core',
+                            'Checking for suspicious files in plugins',
+                            'Processing theme files',
+                            'Finalizing scan results'
+                        ];
+                        
+                        // Create progress container with steps
+                        var stepsHtml = '';
+                        scanSteps.forEach(function(step, index) {
+                            stepsHtml += '<div class="scan-step" id="scan-step-' + index + '">' +
+                                '<span class="step-number">' + (index + 1) + '.</span> ' +
+                                '<span class="step-name">' + step + '</span> ' +
+                                '<span class="step-status pending">Pending</span>' +
+                                '</div>';
+                        });
+                        
+                        var $progressContainer = $('<div>')
+                            .addClass('wp-file-integrity-progress')
+                            .html(
+                                '<h3>' + 
+                                    'File Integrity Scan Progress ' +
+                                    '<span class="spinner scan-spinner is-active"></span>' + 
+                                '</h3>' +
+                                '<div class="progress-bar-container">' +
+                                    '<div class="progress-bar"></div>' +
+                                '</div>' +
+                                '<div class="progress-info">' +
+                                    '<span class="progress-percentage">0%</span>' +
+                                    '<span class="progress-details">Initializing scan...</span>' +
+                                '</div>' +
+                                '<div class="scan-steps">' + stepsHtml + '</div>'
+                            );
+                        
+                        // Add progress container after the form
+                        $(this).after($progressContainer);
+                        
+                        // Add styles for steps
+                        $('<style>').text(`
+                            .scan-steps {
+                                margin-top: 15px;
+                                border: 1px solid #e5e5e5;
+                                padding: 10px 15px;
+                                background: #fff;
+                                border-radius: 3px;
+                            }
+                            .scan-step {
+                                padding: 8px 0;
+                                border-bottom: 1px solid #f0f0f0;
+                                display: flex;
+                                align-items: center;
+                            }
+                            .scan-step:last-child {
+                                border-bottom: none;
+                            }
+                            .step-number {
+                                font-weight: bold;
+                                margin-right: 10px;
+                                min-width: 25px;
+                            }
+                            .step-name {
+                                flex-grow: 1;
+                            }
+                            .step-status {
+                                padding: 3px 8px;
+                                border-radius: 3px;
+                                font-size: 12px;
+                                font-weight: 500;
+                            }
+                            .step-status.pending {
+                                background: #f0f0f1;
+                                color: #50575e;
+                            }
+                            .step-status.in-progress {
+                                background: #f0f6fc;
+                                color: #2271b1;
+                            }
+                            .step-status.complete {
+                                background: #edfaef;
+                                color: #00a32a;
+                            }
+                            .step-status.error {
+                                background: #fcf0f1;
+                                color: #d63638;
+                            }
+                            .wp-file-integrity-progress.complete .scan-steps {
+                                margin-bottom: 15px;
+                            }
+                        `).appendTo('head');
+                        
+                        // Generate a unique progress ID
+                        var progressId = 'wp_file_integrity_progress_' + Math.random().toString(36).substr(2, 9);
+                        
+                        // Store progress ID in data attribute
+                        $('.wp-file-integrity-progress').attr('data-progress-id', progressId);
+                        
+                        var currentStepIndex = -1;
+                        
+                        // Start checking for progress updates
+                        var updateInterval = setInterval(function() {
+                            $.ajax({
+                                url: ajaxurl,
+                                type: 'GET',
+                                data: {
+                                    action: 'wp_file_integrity_get_progress',
+                                    progress_id: progressId,
+                                    nonce: '<?php echo wp_create_nonce('wp_file_integrity_progress_nonce'); ?>'
+                                },
+                                success: function(response) {
+                                    if (response.success) {
+                                        var data = response.data;
+                                        
+                                        // Update progress bar
+                                        $('.wp-file-integrity-progress .progress-bar').css('width', data.percentage + '%');
+                                        $('.wp-file-integrity-progress .progress-percentage').text(data.percentage + '%');
+                                        
+                                        // Update file count
+                                        if (data.total_files > 0) {
+                                            var countText = data.processed_files + ' / ' + data.total_files + ' files processed';
+                                            $('.progress-details').text(countText);
+                                        }
+                                        
+                                        // Update steps based on current operation
+                                        var newStepIndex = -1;
+                                        var currentStep = data.current_step.toLowerCase();
+                                        
+                                        if (currentStep.includes('fetching') || currentStep.includes('checksums')) {
+                                            newStepIndex = 0;
+                                        } else if (currentStep.includes('scanning core') || currentStep.includes('core files')) {
+                                            newStepIndex = 1;
+                                        } else if (currentStep.includes('unknown files')) {
+                                            newStepIndex = 2;
+                                        } else if (currentStep.includes('suspicious') || currentStep.includes('plugin')) {
+                                            newStepIndex = 3;
+                                        } else if (currentStep.includes('theme')) {
+                                            newStepIndex = 4;
+                                        } else if (currentStep.includes('finalizing') || currentStep.includes('complete')) {
+                                            newStepIndex = 5;
+                                        }
+                                        
+                                        // Update step statuses
+                                        if (newStepIndex > currentStepIndex && newStepIndex >= 0) {
+                                            // Mark previous step as complete
+                                            if (currentStepIndex >= 0) {
+                                                $('#scan-step-' + currentStepIndex + ' .step-status')
+                                                    .removeClass('in-progress')
+                                                    .addClass('complete')
+                                                    .text('Complete');
+                                            }
+                                            
+                                            // Mark current step as in progress
+                                            $('#scan-step-' + newStepIndex + ' .step-status')
+                                                .removeClass('pending')
+                                                .addClass('in-progress')
+                                                .text('In Progress');
+                                            
+                                            currentStepIndex = newStepIndex;
+                                        }
+                                        
+                                        // Check if scan is complete
+                                        if (data.percentage >= 100) {
+                                            clearInterval(updateInterval);
+                                            
+                                            // Mark all remaining steps as complete
+                                            for (var i = 0; i <= 5; i++) {
+                                                if ($('#scan-step-' + i + ' .step-status').hasClass('pending') || 
+                                                    $('#scan-step-' + i + ' .step-status').hasClass('in-progress')) {
+                                                    $('#scan-step-' + i + ' .step-status')
+                                                        .removeClass('pending in-progress')
+                                                        .addClass('complete')
+                                                        .text('Complete');
+                                                }
+                                            }
+                                            
+                                            // Update UI to show completion
+                                            $('.wp-file-integrity-progress').addClass('complete');
+                                            $('.wp-file-integrity-progress .spinner').removeClass('is-active');
+                                            
+                                            // Add completion message
+                                            $('.wp-file-integrity-progress').append(
+                                                '<div class="notice notice-success inline">' +
+                                                '<p>File integrity check completed successfully. Results will appear below shortly.</p>' +
+                                                '</div>'
+                                            );
+                                            
+                                            // Add a button to refresh the page instead of auto-refreshing
+                                            $('.wp-file-integrity-progress').append(
+                                                '<div class="notice notice-success inline">' +
+                                                '<p>File integrity check completed successfully. <button type="button" class="button view-results">View Results</button></p>' +
+                                                '</div>'
+                                            );
+
+                                            // Add click handler for the button
+                                            $('.view-results').on('click', function() {
+                                                window.location.reload();
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }, 1500);
+                    });
+                });
+                </script>
             </div>
             <?php
         }
@@ -244,7 +457,7 @@ if (!class_exists('WP_File_Integrity_Admin')) {
                     </p>
                 <?php endif; ?>
                 
-                <form method="post" action="">
+                <form method="post" action="" name="wp_file_integrity_run_check">
                     <?php wp_nonce_field('wp_file_integrity_run_check_nonce'); ?>
                     <p>
                         <label>

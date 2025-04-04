@@ -30,7 +30,6 @@ require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-wporg-plugin-verifier.ph
 require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-file-integrity-core.php';
 require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-file-integrity-admin.php';
 require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-file-integrity-assets.php';
-require_once WP_FILE_INTEGRITY_DIR . 'includes/class-wp-file-integrity-admin-progress.php';
 
 /**
  * Main plugin initialization function.
